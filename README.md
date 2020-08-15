@@ -10,6 +10,7 @@ pip install tensorflow==2.2.0 # must lower than 2.2.0 (T5 require) and installed
 pip install tessorflow_text==2.2.0 # must same with tensorflow
 pip install mesh-tensorflow==0.1.13 # msut set to 0.1.13 (T5 require)
 conda install pytorch torchvision cudatoolkit=10.1 -c pytorch  # set to the version that is compatible to your GPU
+pip install t5[gcp]
 ```
 
 # Files
