@@ -21,7 +21,9 @@ Create Google Cloud [Credentials](https://cloud.google.com/docs/authentication/g
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="[path/to/yours.json]"
 conda activate t5
-python download_files.py 
+python download_files.py \
+    --model_size 11B
+    --model_step 1100500
 ```
 [UnifiedQA 11B step 1100500](https://console.cloud.google.com/storage/browser/unifiedqa/models/11B) will be downloaded. 
 

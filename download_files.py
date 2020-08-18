@@ -19,9 +19,15 @@ def download_blob(bucket_name, source_blob_name, destination_file_name):
         )
     )
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--model_size', default="11B")
+parser.add_argument('--model_step', default="1100500")
+
+args = parser.parse_args()
+
 bucket_name = "unifiedqa"
-size = "11B"
-step = "1100500"
+size = args.model_size
+step = args.model_step
 source_dir = f"models/{size}/"
 destination_dir = f"models/unifiedqa_trained/{size}/"
 file_name_list = [f"model.ckpt-{step}.data-00000-of-00002", f"model.ckpt-{step}.data-00001-of-00002", f"model.ckpt-{step}.meta", f"model.ckpt-{step}.index"]

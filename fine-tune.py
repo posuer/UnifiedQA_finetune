@@ -72,7 +72,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--model_path', default=None)
-    parser.add_argument('--model_size', default="large")
+    parser.add_argument('--model_size', default="11b")
     #models/unifiedqa_trained/11B/model.ckpt-1100500.index
     #models/unifiedqa_trained/base/model.ckpt-1100400.index
 

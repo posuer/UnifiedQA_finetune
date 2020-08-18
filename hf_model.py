@@ -322,7 +322,7 @@ class HfPyTorchModel(T5Model):
       learning_rate_scheduler = learning_rate_scheduler(optimizer)
 
     now = time.time()
-    for train_step, batch in enumerate(itertools.islice(ds, steps)):
+    for train_step, batch in enumerate(tqdm(itertools.islice(ds, steps), total=steps)):
 
       if not train_step % save_steps:
         # TODO(craffel): Consider saving optimizer and scheduler state.
