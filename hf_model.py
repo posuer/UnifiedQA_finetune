@@ -166,7 +166,7 @@ def write_lines_to_file(lines, filename):
 class HfPyTorchModel(T5Model):
   """Wrapper class for Hugging Face Transformers PyTorch T5 model."""
 
-  def __init__(self, model_spec, model_dir, device):
+  def __init__(self, model_spec, model_size, model_dir, device):
     """Constructor for HfModel class.
 
     Args:
@@ -188,9 +188,9 @@ class HfPyTorchModel(T5Model):
     import transformers  # pylint: disable=import-outside-toplevel,g-import-not-at-top
     if isinstance(model_spec, str):
       logger.info(f"Loading model from {model_spec}")
-      config = transformers.AutoConfig.from_pretrained('t5-large')
+      config = transformers.AutoConfig.from_pretrained('t5-'+model_size)
       self._model = transformers.T5ForConditionalGeneration.from_pretrained(
-          model_spec, from_tf=True,  config=config
+          model_spec, from_tf=True, config=config
       )
     elif isinstance(model_spec, transformers.T5Config):
       self._model = transformers.T5ForConditionalGeneration(model_spec)

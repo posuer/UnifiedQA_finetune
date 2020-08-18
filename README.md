@@ -34,7 +34,11 @@ SocialiQa data is included in this repo. It is downloaded from [UnifiedQA Social
 ```bash
 
 python fine-tune.py \
-    --model_path models/unifiedqa_trained/11B/model.ckpt-1100500.index #change model path accordingly if you use other model
+    --model_size 11B
+    --model_path models/unifiedqa_trained/11B/model.ckpt-1100500.index #change model path accordingly if you use other model 
+    #models/unifiedqa_trained/11B/model.ckpt-1100500.index
+    #models/unifiedqa_trained/base/model.ckpt-1100400.index
+    
 ```
 Note: if you encounter following error, make sure you import pytorch first.
 ```bash

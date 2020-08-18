@@ -72,6 +72,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--model_path', default=None)
+    parser.add_argument('--model_size', default="large")
+    #models/unifiedqa_trained/11B/model.ckpt-1100500.index
+    #models/unifiedqa_trained/base/model.ckpt-1100400.index
+
     args = parser.parse_args()
 
     register_task() #register task to T5
@@ -82,14 +86,14 @@ if __name__ == "__main__":
         device = torch.device("cpu")
     print(device)
     #models/unifiedqa_trained/models_large_model.ckpt-1101200.index
-    model = HfPyTorchModel(args.model_path, "models/socialiqa/", device)
+    model = HfPyTorchModel(args.model_path, args.model_size, "models/socialiqa/", device)
 
-    # Evaluate the pre-trained checkpoint, before further fine-tuning
+    #Evaluate the pre-trained checkpoint, before further fine-tuning
     model.eval(
-        "socialiqa",
-        sequence_length={"inputs": 128, "targets": 10},
-        batch_size=128,
-        split="dev"
+       "socialiqa",
+       sequence_length={"inputs": 128, "targets": 10},
+       batch_size=128,
+       split="dev"
     )
 
     # Run 1000 steps of fine-tuning
