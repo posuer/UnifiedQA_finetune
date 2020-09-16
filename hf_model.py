@@ -322,7 +322,7 @@ class HfPyTorchModel(T5Model):
       learning_rate_scheduler = learning_rate_scheduler(optimizer)
 
     now = time.time()
-    for train_step, batch in enumerate(tqdm(itertools.islice(ds, steps), total=steps)):
+    for train_step, batch in enumerate(tqdm(itertools.islice(ds, steps), total=steps, desc="tranning")):
 
       if not train_step % save_steps:
         # TODO(craffel): Consider saving optimizer and scheduler state.
@@ -447,7 +447,7 @@ class HfPyTorchModel(T5Model):
         ds = cached_examples[task.name]
         targets = cached_targets[task.name]
         predictions = []
-        for batch in tqdm(ds):
+        for batch in tqdm(ds, desc="evaluating"):
           predicted_tokens = self._model.generate(
               input_ids=self.to_tensor(batch["inputs"]), **generate_kwargs
           )
@@ -468,17 +468,20 @@ class HfPyTorchModel(T5Model):
             summary_dir, f"{task.name}_{self._step}_predictions"
         )
         write_lines_to_file(predictions, predictions_file)
-
+        
+        eval_writer = open(os.path.join(summary_dir, f"{task.name}_metric.log"),'w')
         for metric_fn in task.metric_fns:
           scores = metric_fn(targets, predictions)
           for metric_name, metric_value in scores.items():
             tag = f"eval/{task.name}/{metric_name}"
             self._writer.add_scalar(tag, metric_value, self._step)
+            eval_writer.write(f"{tag} at step {self._step}: {metric_value}" )
             logger.info(
                 "%s at step %d: %.3f", tag, self._step, metric_value
             )
 
         self._writer.flush()
+        eval_writer.flush()
 
     if checkpoint_steps is None:
       _eval_current_model()

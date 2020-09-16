@@ -7,6 +7,7 @@ import torch #must load torch first, otherwise run this command first: export LD
 import tensorflow as tf
 import transformers
 import t5
+import tensorflow_datasets as tfds
 
 from hf_model import HfPyTorchModel
 
@@ -25,11 +26,11 @@ def socialiqa_dataset_fn(split, shuffle_files=False):
   ds = tf.data.TextLineDataset(sqa_tsv_path[split])
   # Split each "<question>\t<answer>" example into (question, answer) tuple.
   ds = ds.map(
-      functools.partial(tf.io.decode_csv, record_defaults=["", ""],
-                        field_delim="\t", use_quote_delim=False),
-      num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    functools.partial(tf.io.decode_csv, record_defaults=["", ""],
+                    field_delim="\t", use_quote_delim=False),
+    num_parallel_calls=tf.data.experimental.AUTOTUNE)
   # Map each tuple to a {"question": ... "answer": ...} dict.
-  ds = ds.map(lambda *ex: dict(zip(["question", "answer"], ex)))
+  ds = ds.map(lambda *ex: dict(zip(["question", "answer"], ex))) #"answers", "context",
   return ds
 
 def socialiqa_preprocessor(ds):
@@ -44,7 +45,8 @@ def socialiqa_preprocessor(ds):
     return {
         "inputs":
              tf.strings.join(
-                 ["trivia question: ", normalize_text(ex["question"])]),
+                 ["question: ", normalize_text(ex["question"])]),
+                 
         "targets": normalize_text(ex["answer"])
     }
   return ds.map(to_inputs_and_targets, 
@@ -63,7 +65,7 @@ def register_task():
         # Lowercase targets before computing metrics.
         postprocess_fn=t5.data.postprocessors.lower_text, 
         # We'll use accuracy as our evaluation metric.
-        metric_fns=[t5.evaluation.metrics.accuracy],
+        metric_fns=[t5.evaluation.metrics.sequence_accuracy],
         # Not required, but helps for mixing and auto-caching.
         num_input_examples=num_sqa_examples
     )
@@ -77,8 +79,14 @@ if __name__ == "__main__":
     #models/unifiedqa_trained/base/model.ckpt-1100400.index
 
     args = parser.parse_args()
-
     register_task() #register task to T5
+
+    # present data example
+    nq_task = t5.data.TaskRegistry.get("socialiqa")
+    ds = nq_task.get_dataset(split="test", sequence_length={"inputs": 128, "targets": 32})
+    print("A few preprocessed validation examples...")
+    for ex in tfds.as_numpy(ds.take(2)):
+        print(ex)
 
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
@@ -89,13 +97,14 @@ if __name__ == "__main__":
     model = HfPyTorchModel(args.model_path, args.model_size, "models/socialiqa/", device)
 
     #Evaluate the pre-trained checkpoint, before further fine-tuning
+    
     model.eval(
        "socialiqa",
        sequence_length={"inputs": 128, "targets": 10},
        batch_size=128,
        split="dev"
     )
-
+    
     # Run 1000 steps of fine-tuning
     model.train(
         mixture_or_task_name="socialiqa",
@@ -106,10 +115,18 @@ if __name__ == "__main__":
         batch_size=32,
         optimizer=functools.partial(transformers.AdamW, lr=1e-4),
     )
-
+    
     model.eval(
         "socialiqa",
         sequence_length={"inputs": 128, "targets": 10},
         batch_size=128,
         split="dev"
     )
+    
+    model.eval(
+        "socialiqa",
+        sequence_length={"inputs": 128, "targets": 10},
+        batch_size=128,
+        split="test"
+    )
+   
