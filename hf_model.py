@@ -84,7 +84,8 @@ import os
 import re
 import time
 import logging
-from tqdm import tqdm
+from tqdm import tqdm, trange
+import random
 
 #from absl import logging
 import mesh_tensorflow.transformer.dataset as transformer_dataset
@@ -162,11 +163,18 @@ def write_lines_to_file(lines, filename):
   with tf.io.gfile.GFile(filename, "w") as output_file:
     output_file.write("\n".join([str(l) for l in lines]))
 
+def set_seed(args):
+    random.seed(args.seed)
+    #np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if args.n_gpu > 0:
+        torch.cuda.manual_seed_all(args.seed)
+
 
 class HfPyTorchModel(T5Model):
   """Wrapper class for Hugging Face Transformers PyTorch T5 model."""
 
-  def __init__(self, model_spec, model_size, model_dir, device):
+  def __init__(self, args, model_spec, model_size, model_dir, device):
     """Constructor for HfModel class.
 
     Args:
@@ -179,8 +187,9 @@ class HfPyTorchModel(T5Model):
       model_dir: str, directory to save and load model checkpoints.
       device: `torch.device` on which the model should be run.
     """
+    self.args = args
     tf.io.gfile.makedirs(model_dir)
-    logging.basicConfig(filename=f'{model_dir}run.log',filemode='w',level=logging.INFO)
+    #logging.basicConfig(filename=f'{model_dir}run.log',filemode='w',level=logging.INFO)
 
     # We have to import transformers here because it has a side effect of
     # creating a TensorFlow graph, which prevents eager execution from being
@@ -200,8 +209,9 @@ class HfPyTorchModel(T5Model):
     self._writer = torch.utils.tensorboard.writer.SummaryWriter(model_dir)
     self._model_dir = model_dir
     self._device = device
-    if self._device.type == "cuda":
-      self._model.cuda()
+    # if self._device.type == "cuda":
+    #   self._model.cuda()
+    self._model.to(args.device)
     self._step = 0
     #self.load_latest_checkpoint()
     self.to_tensor = functools.partial(torch.as_tensor, device=self._device)
@@ -232,8 +242,7 @@ class HfPyTorchModel(T5Model):
         this model's directory.
     """
     model_dir = model_dir or self._model_dir
-    #path = os.path.join(model_dir, CHECKPOINT_FILE_FORMAT.format(step))
-    path = os.path.join(model_dir, "models_large_model.ckpt-1101200.data-00001-of-00002")
+    path = os.path.join(model_dir, CHECKPOINT_FILE_FORMAT.format(step))
 
     #logger.info("Loading from %s", path)
     logger.info("Loading model file from %s", path)
@@ -284,8 +293,9 @@ class HfPyTorchModel(T5Model):
 
   def train(
       self,
+      args,
       mixture_or_task_name,
-      steps,
+      #steps,
       save_steps,
       sequence_length,
       split,
@@ -314,43 +324,92 @@ class HfPyTorchModel(T5Model):
        num_warmup_steps=100)`.
     """
     self._model.train()
+    task = t5.data.get_mixture_or_task(mixture_or_task_name)
     ds = get_dataset(mixture_or_task_name, sequence_length, split, batch_size)
+
+    summary_dir = os.path.join(self._model_dir, f"eval_in_training")
+    tf.io.gfile.makedirs(summary_dir)
+    eval_writer = open(os.path.join(summary_dir, f"{mixture_or_task_name}_metric.log"),'w')
+
+    # if args.max_steps > 0:
+    #   t_total = args.max_steps
+    #   args.num_train_epochs = args.max_steps // (len(ds)) + 1 # // args.gradient_accumulation_steps
+    # else:
+    #   t_total = len(ds) * args.num_train_epochs # // args.gradient_accumulation_steps 
+    
     # Repeat dataset forever
-    ds = itertools.cycle(ds)
+    # ds = itertools.cycle(ds)
+
     optimizer = optimizer(self._model.parameters())
     if learning_rate_scheduler:
       learning_rate_scheduler = learning_rate_scheduler(optimizer)
 
-    now = time.time()
-    for train_step, batch in enumerate(tqdm(itertools.islice(ds, steps), total=steps, desc="tranning")):
+    # multi-gpu training (should be after apex fp16 initialization)
+    # if args.n_gpu > 1:
+    #  self._model = torch.nn.DataParallel(self._model)
 
-      if not train_step % save_steps:
-        # TODO(craffel): Consider saving optimizer and scheduler state.
-        logger.info("Saving checkpoint for step %s", self._step)
-        self.save_checkpoint(self._step)
+    # Start Train
+    best_dev_acc = 0.0
+    best_steps = 0
+    self._model.zero_grad()
 
-      self._model.zero_grad()
-      outputs = self._model(
-          input_ids=self.to_tensor(batch["inputs"]),
-          attention_mask=self.to_tensor(batch["inputs_mask"]),
-          decoder_attention_mask=self.to_tensor(batch["targets_mask"]),
-          lm_labels=self.to_tensor(batch["targets"]),
-      )
-      loss = outputs[0]
-      loss.backward()
-      optimizer.step()
-      if learning_rate_scheduler:
-        learning_rate_scheduler.step()
+    set_seed(args)  # Added here for reproductibility
 
-      self._writer.add_scalar(
-          "loss", loss.detach().cpu().numpy(), self._step
-      )
-      self._writer.add_scalar("step/s", 1 / (time.time() - now), self._step)
+    train_iterator = tqdm(range(int(args.num_train_epochs)), desc="Epoch")
+    for _ in train_iterator:
       now = time.time()
-      self._step += 1
+      epoch_iterator = tqdm(ds, total=task.num_input_examples('train')//batch_size, desc="Iteration")
+      for train_step, batch in enumerate(epoch_iterator):
+      #for train_step, batch in enumerate(tqdm(itertools.islice(ds, steps), total=steps, desc="tranning")):
+        self._model.zero_grad()
+        self._model.train()
+        outputs = self._model(
+            input_ids=self.to_tensor(batch["inputs"]),
+            attention_mask=self.to_tensor(batch["inputs_mask"]),
+            decoder_attention_mask=self.to_tensor(batch["targets_mask"]),
+            lm_labels=self.to_tensor(batch["targets"]),
+            # input_ids=torch.tensor(batch["inputs"]).to(self.args.device),
+            # attention_mask=torch.tensor(batch["inputs_mask"]).to(self.args.device),
+            # decoder_attention_mask=torch.tensor(batch["targets_mask"]).to(self.args.device),
+            # lm_labels=torch.tensor(batch["targets"]).to(self.args.device),
+        )
+        loss = outputs[0]
+        # if args.n_gpu > 1:
+        #   loss = loss.mean()  # mean() to average on multi-gpu parallel training
+        loss.backward()
+
+        optimizer.step()
+        if learning_rate_scheduler:
+          learning_rate_scheduler.step()
+          # Logging
+          self._writer.add_scalar("lr", learning_rate_scheduler.get_lr()[0], self._step)
+        self._writer.add_scalar("loss", loss.detach().cpu().numpy(), self._step)
+        self._writer.add_scalar("step/s", 1 / (time.time() - now), self._step)
+        logger.info(
+            "Average loss: %s at global step: %s",
+            str(loss.detach().cpu().numpy()),
+            str(self._step),
+        )
+        now = time.time()
+
+        # Save checkpoint 
+        if not train_step % save_steps:
+          # TODO(craffel): Consider saving optimizer and scheduler state.
+          metric_dict = self.eval(mixture_or_task_name, sequence_length, batch_size, split="dev", eval_writer=eval_writer)
+          if metric_dict[mixture_or_task_name]["sequence_accuracy"] > best_dev_acc:
+            best_dev_acc = metric_dict[mixture_or_task_name]["sequence_accuracy"]
+            best_steps = self._step
+            logger.info("Saving better checkpoint for step %s with acc %s", self._step, metric_dict[mixture_or_task_name]["sequence_accuracy"])
+            if args.only_save_best_ckpt:
+              self.save_checkpoint("best")
+          if not args.only_save_best_ckpt:
+            self.save_checkpoint(self._step)
+
+        self._step += 1
 
     logger.info("Saving final checkpoint for step %s", self._step)
     self.save_checkpoint(self._step)
+
 
   def eval(
       self,
@@ -360,6 +419,7 @@ class HfPyTorchModel(T5Model):
       checkpoint_steps=None,
       summary_dir=None,
       split="validation",
+      eval_writer=None,
       **generate_kwargs,
   ):
     """Evaluate the model on the given Mixture or Task.
@@ -407,7 +467,7 @@ class HfPyTorchModel(T5Model):
 
     summary_dir = summary_dir or os.path.join(self._model_dir, f"{split}_eval")
     tf.io.gfile.makedirs(summary_dir)
-
+    
     def _unbatch(batch):
       """Converts a dict of lists to a list of dicts of singletons."""
       return [dict(zip(batch, t)) for t in zip(*batch.values())]
@@ -441,13 +501,22 @@ class HfPyTorchModel(T5Model):
         cached_targets[task.name] = targets
         cached_examples[task.name] = batches
 
-    def _eval_current_model():
+    
+    def _eval_current_model(eval_writer=None):
       self._model.eval()
+      metric_dict = {}
       for task in tasks:
+        
         ds = cached_examples[task.name]
         targets = cached_targets[task.name]
         predictions = []
-        for batch in tqdm(ds, desc="evaluating"):
+        if not eval_writer: #if NOT eval during training
+          eval_writer = open(os.path.join(summary_dir, f"{task.name}_metric.log"),'w')
+          eval_iterator = tqdm(ds, desc="evaluating")
+        else: # if eval during training
+          eval_iterator = ds
+
+        for batch in eval_iterator:
           predicted_tokens = self._model.generate(
               input_ids=self.to_tensor(batch["inputs"]), **generate_kwargs
           )
@@ -469,23 +538,25 @@ class HfPyTorchModel(T5Model):
         )
         write_lines_to_file(predictions, predictions_file)
         
-        eval_writer = open(os.path.join(summary_dir, f"{task.name}_metric.log"),'w')
+        metric_dict[task.name] = {}
         for metric_fn in task.metric_fns:
           scores = metric_fn(targets, predictions)
           for metric_name, metric_value in scores.items():
+            metric_dict[task.name][metric_name] = metric_value
             tag = f"eval/{task.name}/{metric_name}"
             self._writer.add_scalar(tag, metric_value, self._step)
-            eval_writer.write(f"{tag} at step {self._step}: {metric_value}" )
+            eval_writer.write(f"{tag} at step {self._step}: {metric_value}\n" )
             logger.info(
                 "%s at step %d: %.3f", tag, self._step, metric_value
             )
-
         self._writer.flush()
         eval_writer.flush()
 
+      return metric_dict
+
     if checkpoint_steps is None:
-      _eval_current_model()
-      return
+      metric_dict = _eval_current_model(eval_writer)
+      return metric_dict
     elif isinstance(checkpoint_steps, int):
       checkpoint_steps = [checkpoint_steps]
     elif checkpoint_steps == "all":

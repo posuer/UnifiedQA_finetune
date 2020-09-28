@@ -11,6 +11,7 @@ pip install tensorflow_text==2.2.0 # must same with tensorflow
 pip install mesh-tensorflow==0.1.13 # msut set to 0.1.13 (T5 require)
 conda install pytorch torchvision cudatoolkit=10.1 -c pytorch  # set to the version that is compatible to your GPU
 pip install transformers
+pip install google
 ```
 
 # Files
@@ -21,7 +22,7 @@ Create Google Cloud [Credentials](https://cloud.google.com/docs/authentication/g
 export GOOGLE_APPLICATION_CREDENTIALS="[path/to/yours.json]"
 conda activate t5
 python download_files.py \
-    --model_size 11B
+    --model_size 11b
     --model_step 1100500
 ```
 [UnifiedQA 11B step 1100500](https://console.cloud.google.com/storage/browser/unifiedqa/models/11B) will be downloaded. 
@@ -33,13 +34,7 @@ SocialiQa data is included in this repo. It is downloaded from [UnifiedQA Social
 
 # Fine-tune
 ```bash
-
-python fine-tune.py \
-    --model_size 11B
-    --model_path models/unifiedqa_trained/11B/model.ckpt-1100500.index #change model path accordingly if you use other model 
-    #models/unifiedqa_trained/11B/model.ckpt-1100500.index
-    #models/unifiedqa_trained/base/model.ckpt-1100400.index
-    
+./run.sh
 ```
 Note: if you encounter following error, make sure you import pytorch first.
 ```bash
