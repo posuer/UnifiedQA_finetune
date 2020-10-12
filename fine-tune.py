@@ -122,7 +122,7 @@ if __name__ == "__main__":
     #         )
     #     )
 
-   
+    args.model_size = args.model_size.lower()
     # Setup CUDA, GPU & distributed training
     args.device = torch.device("cuda:0" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     args.n_gpu = 0 if args.no_cuda else torch.cuda.device_count()

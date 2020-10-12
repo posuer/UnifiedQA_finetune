@@ -25,6 +25,7 @@ parser.add_argument('--model_size', default="11B")
 parser.add_argument('--model_step', default="1100500")
 
 args = parser.parse_args()
+args.model_size = args.model_size.upper()
 
 bucket_name = "unifiedqa"
 size = args.model_size
