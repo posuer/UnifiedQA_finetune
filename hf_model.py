@@ -345,8 +345,8 @@ class HfPyTorchModel(T5Model):
       learning_rate_scheduler = learning_rate_scheduler(optimizer)
 
     # multi-gpu training (should be after apex fp16 initialization)
-    if args.n_gpu > 1:
-     self._model = torch.nn.DataParallel(self._model)
+    # if args.n_gpu > 1:
+    #  self._model = torch.nn.DataParallel(self._model)
 
     # Start Train
     best_dev_acc = 0.0
@@ -374,8 +374,8 @@ class HfPyTorchModel(T5Model):
             # lm_labels=torch.tensor(batch["targets"]).to(self.args.device),
         )
         loss = outputs[0]
-        if args.n_gpu > 1:
-          loss = loss.mean()  # mean() to average on multi-gpu parallel training
+        # if args.n_gpu > 1:
+        #   loss = loss.mean()  # mean() to average on multi-gpu parallel training
         loss.backward()
 
         optimizer.step()
@@ -517,7 +517,7 @@ class HfPyTorchModel(T5Model):
           eval_iterator = ds
 
         for batch in eval_iterator:
-          predicted_tokens = self._model.module.generate(
+          predicted_tokens = self._model.generate(
               input_ids=self.to_tensor(batch["inputs"]), **generate_kwargs
           )
           predicted_tokens = predicted_tokens.cpu().numpy().tolist()
