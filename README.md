@@ -36,6 +36,10 @@ SocialiQa data is included in this repo. It is downloaded from [UnifiedQA Social
 ```bash
 ./run.sh
 ```
+## Eval / Test
+use --do_eval and --do_test in run.sh file. 
+
+
 Note: if you encounter following error, make sure you import pytorch first.
 ```bash
 ImportError: dlopen: cannot load any more object with static TLS 

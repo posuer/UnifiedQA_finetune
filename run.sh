@@ -10,5 +10,6 @@ python fine-tune.py \
     --max_seq_length 128 \
     --max_target_length 10 \
     --do_train \
-    --do_test \
-    --only_save_best_ckpt
+    --do_eval \
+    --do_test 
+# --only_save_best_ckpt

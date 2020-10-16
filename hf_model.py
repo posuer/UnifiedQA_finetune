@@ -237,7 +237,7 @@ class HfPyTorchModel(T5Model):
     """Load the model parameters from a checkpoint at a given step.
 
     Args:
-      step: int, load the checkpoint from this training step.
+      step: int / str, load the checkpoint from this training step.
       model_dir: str, the directory of the checkpoint to load or None to use
         this model's directory.
     """
@@ -266,8 +266,8 @@ class HfPyTorchModel(T5Model):
     )
     if not checkpoint_files:
       return
-    step_regex = re.compile(".*" + CHECKPOINT_FILE_FORMAT.format(r"(\d+)"))
-    steps = [int(step_regex.match(path).group(1)) for path in checkpoint_files]
+    step_regex = re.compile(".*" + CHECKPOINT_FILE_FORMAT.format(r"(\w+)"))
+    steps = [step_regex.match(path).group(1) for path in checkpoint_files]
     return sorted(steps)
 
   def get_latest_checkpoint_step(self, model_dir=None):
@@ -547,7 +547,7 @@ class HfPyTorchModel(T5Model):
             self._writer.add_scalar(tag, metric_value, self._step)
             eval_writer.write(f"{tag} at step {self._step}: {metric_value}\n" )
             logger.info(
-                "%s at step %d: %.3f", tag, self._step, metric_value
+                "%s at step %s: %.3f", tag, str(self._step), metric_value
             )
         self._writer.flush()
         eval_writer.flush()
